@@ -1,0 +1,31 @@
+cabal-version:       >=1.10
+name:                nixbot-telegram
+version:             0.1.0.0
+build-type:          Simple
+
+executable nixbot-telegram
+  hs-source-dirs:      src
+  main-is:             Main.hs
+  ghc-options:         -Wall
+  default-language:    Haskell2010
+  other-modules:       Bot
+                     , Command.Nix.Repl
+                     , NixEval
+  build-depends:       base >= 4.7 && < 5
+                       , telegram-raw-api
+                       , telegram-types
+                       , servant
+                       , servant-client
+                       , http-client
+                       , http-client-tls
+                       , text
+                       , data-default
+                       , transformers
+                       , containers
+                       , bytestring
+                       , typed-process
+                       , mtl
+                       , megaparsec
+                       , filepath
+                       , directory
+                       , aeson
