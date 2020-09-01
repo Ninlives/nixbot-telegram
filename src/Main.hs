@@ -19,6 +19,7 @@ import qualified Data.Text as T
 import Control.Monad
 import Control.Monad.Trans.State (modify)
 import Control.Monad.Trans.Class
+import Control.Monad.IO.Class
 import Control.Concurrent
 import Control.Arrow
 import Bot
@@ -26,14 +27,18 @@ import qualified Bot as B
 import Command.Nix.Repl
 import System.Environment
 import System.Exit
+import System.Directory
+import Data.Map
 
 import GHC.Generics
 import Data.Aeson hiding (Success)
 import qualified Data.ByteString.Lazy as BSL
 
-data BotConfig = BotConfig { nixInstantiatePath :: FilePath
-                           , nixPath            :: [String]
-                           , token              :: T.Text
+data BotConfig = BotConfig { nixInstantiatePath  :: FilePath
+                           , nixPath             :: [String]
+                           , exprFilePath        :: FilePath
+                           , predefinedVariables :: Maybe (Map String String)
+                           , token               :: T.Text
                            } deriving (Generic)
 instance FromJSON BotConfig where
     parseJSON = genericParseJSON defaultOptions
@@ -46,11 +51,26 @@ main = do args <- getArgs
           case config of
             Nothing -> do putStrLn "Error parsing config."
                           exitWith (ExitFailure 1)
-            Just (BotConfig { Main.nixInstantiatePath = nip, Main.nixPath = np, Main.token = t }) -> do 
+            Just (BotConfig { Main.nixInstantiatePath = nip
+                            , Main.nixPath = np
+                            , Main.token = t
+                            , Main.exprFilePath = efp
+                            , Main.predefinedVariables = pdv
+                            }) -> do 
                 manager' <- newManager tlsManagerSettings
+                absExpr <- makeAbsolute efp
                 let token' = Token t
                     env'   = mkClientEnv manager' (BaseUrl Https "api.telegram.org" 443 "")
-                    ctx    = BotContext { B.chatId = Nothing, B.token = token', env = env', B.nixInstantiatePath = nip, B.nixPath = np }
+                    ctx    = BotContext { B.chatId = Nothing
+                                        , B.token = token'
+                                        , env = env'
+                                        , B.nixInstantiatePath = nip
+                                        , B.nixPath = np
+                                        , B.exprFilePath = absExpr
+                                        , B.predefinedVariables = case pdv of
+                                                                    Nothing -> empty
+                                                                    Just map -> map
+                                        }
                 loop ctx 0
 
     where loop ctx offset_ = do
@@ -74,20 +94,24 @@ process = process' 0
     where process' id []              = return id
           process' id (update:others) = processOne update >>= \id_ -> process' id_ others
           processOne update = do
+              liftIO $ print update
               let id  = updateId update
                   cid = message >>> metadata >>> chat >>> M.chatId $ update
-                  respond msg = sendMessage $ def { D.chatId = (ChatId cid), D.text = msg }
+                  mid = message >>> metadata >>> messageId $ update
+                  respond msg = sendMessage $ def { D.chatId = (ChatId cid), D.text = msg, D.replyToMessageId = Just mid }
+                  processMessage msg = do result <- processMessage' msg
+                                          case result of
+                                            Success msg -> void $ respond msg
+                                            Fail    msg -> void $ respond $ T.concat ["Error: ", msg]
+                                            NoResponse  -> return ()
+                                          return id
               modify $ \ctx -> ctx { B.chatId = Just (ChatId cid) }
               case update of
-                  Message { message = msg } -> do result <- processMessage msg
-                                                  case result of
-                                                    Success msg -> void $ respond msg
-                                                    Fail    msg -> void $ respond $ T.concat ["Error: ", msg]
-                                                    NoResponse  -> void $ respond "NoResponse"
-                                                  return id
-                  _                         -> return id
-          processMessage (Msg { content = TextM { text = txt, entities = es } }) = executeCommands $ extractCommands txt es
-          processMessage _ = return NoResponse
+                  Message { message = msg }       -> processMessage msg
+                  EditedMessage { message = msg } -> processMessage msg
+                  _                               -> return id
+          processMessage' (Msg { content = TextM { text = txt, entities = es } }) = executeCommands $ extractCommands txt es
+          processMessage' _ = return NoResponse
 
 executeCommands :: [Command] -> TelegraM ExecuteResult
 executeCommands []           = return NoResponse

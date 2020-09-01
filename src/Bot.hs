@@ -2,6 +2,7 @@ module Bot where
 
 import Data.Proxy
 import Data.Text
+import Data.Map
 import Servant.Client
 import Web.Telegram.API (SendMessage, Token(..), ChatId(..))
 import Web.Telegram.API.Sending.Data (SMessage(..))
@@ -11,11 +12,13 @@ import Web.Telegram.Types.Update (ReqResult(..), Update(..))
 import Control.Monad.Trans.State (gets, get, StateT, evalStateT)
 import Control.Monad.Trans.Class
 
-data BotContext    = BotContext { chatId             :: Maybe ChatId
-                                , token              :: Token
-                                , env                :: ClientEnv
-                                , nixInstantiatePath :: FilePath
-                                , nixPath            :: [String]
+data BotContext    = BotContext { chatId              :: Maybe ChatId
+                                , token               :: Token
+                                , env                 :: ClientEnv
+                                , nixInstantiatePath  :: FilePath
+                                , nixPath             :: [String]
+                                , exprFilePath        :: FilePath
+                                , predefinedVariables :: Map String String
                                 }
 data Command       = Command { cmdName :: Text, input :: Text }
 data ExecuteResult = NoResponse | Success Text | Fail Text

@@ -76,20 +76,29 @@ parser =
         C.space
         Definition lit <$> P.takeRest
 
-nixFile :: NixState -> String -> String
-nixFile NixState { variables, scopes } lit = "let\n"
-    ++ concatMap (\(l, val) -> "\t" ++ l ++ " = " ++ val ++ ";\n") (M.assocs (M.union variables defaultVariables))
-    ++ "in \n"
-    ++ concatMap (\scope -> "\twith " ++ scope ++ ";\n") (reverse scopes)
-    ++ "\t" ++ lit
+nixFile :: NixState -> String -> TelegraM String
+nixFile NixState { variables, scopes } lit = do
+    writeExprFile scopes lit
+    file <- gets exprFilePath
+    predefinedVariables <- gets predefinedVariables
+    return $ "let overrides = {\n"
+             ++ concatMap (\(l, val) -> "\t" ++ l ++ " = " ++ val ++ ";\n") (M.assocs (M.unions [predefinedVariables, defaultVariables, variables]))
+             ++ "}; in scopedImport overrides " ++ file
+
+writeExprFile :: [ String ] -> String -> TelegraM ()
+writeExprFile scopes lit = do
+    exprPath <- gets exprFilePath
+    let content = concatMap (\scope -> "\twith " ++ scope ++ ";\n") (reverse scopes) ++ "\t" ++ lit
+    lift $ writeFile exprPath content
 
 nixEval :: String -> EvalMode -> TelegraM (Either String String)
 nixEval contents mode = do
   nixInstPath <- gets nixInstantiatePath
   nixPath <- gets Bot.nixPath
+  exprPath <- gets exprFilePath
   res <- lift . liftIO $ nixInstantiate nixInstPath (defNixEvalOptions (Left (BS.fromStrict (encodeUtf8 (Text.pack contents)))))
     { mode = mode
-    , NixEval.nixPath = nixPath
+    , NixEval.nixPath = exprPath:nixPath
     , options = unsetNixOptions
       { allowImportFromDerivation = Just True
       , restrictEval = Just True
@@ -102,7 +111,7 @@ nixEval contents mode = do
 tryMod :: (NixState -> NixState) -> ReplApp (Maybe String)
 tryMod modi = do
   newState <- gets modi
-  let contents = nixFile newState "null"
+  contents <- lift $ nixFile newState "null"
   result <- lift $ nixEval contents Parse
   case result of
     Right _ -> do
@@ -118,7 +127,7 @@ handle (Definition lit val) = do
     Just err -> return err
 handle (Evaluation strict lit) = do
   st <- get
-  let contents = nixFile st ("_show (\n" ++ lit ++ "\n)")
+  contents <- lift $ nixFile st ("_show (\n" ++ lit ++ "\n)")
   result <- lift $ nixEval contents (if strict then Strict else Lazy)
   case result of
     Right value -> return value
@@ -159,9 +168,12 @@ handle (ReplCommand cmd _) = return $ "Unknown command: " ++ cmd
 
 defaultVariables :: Map String String
 defaultVariables = M.fromList
-  [ ("_show", "x: if lib.isDerivation x then \"«derivation ${x.drvPath}»\" else x")
+  [ ("_show", "x: if overrides.lib.isDerivation x then \"«derivation ${x.drvPath}»\" else x")
   , ("pkgs", "import <nixpkgs> {}")
-  , ("lib", "pkgs.lib")
+  , ("lib", "overrides.pkgs.lib")
+  , ("import", "fn: scopedImport overrides fn")
+  , ("scopedImport", "attrs: fn: scopedImport (overrides // attrs) fn")
+  , ("builtins", "builtins // overrides // (overrides.builtinsOverrides or {})")
   ]
 
 evalCommand :: Text -> TelegraM ExecuteResult
