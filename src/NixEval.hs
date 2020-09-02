@@ -25,6 +25,7 @@ data NixOptions = NixOptions
   , allowedUris               :: Maybe [String]
   , showTrace                 :: Maybe Bool
   , pureEval                  :: Maybe Bool
+  , readWriteMode             :: Bool
   }
   deriving (Show)
 
@@ -40,6 +41,7 @@ unsetNixOptions = NixOptions
   , allowedUris = Nothing
   , showTrace = Nothing
   , pureEval = Nothing 
+  , readWriteMode = False
   }
 {-
 publicOptions :: NixOptions
@@ -66,6 +68,7 @@ optionsToArgs opts = concat
   , opt "allowed-uris" allowedUris unwords
   , opt "show-trace" showTrace bool
   , opt "pure-eval" pureEval bool
+  , if readWriteMode opts then [ "--read-write-mode" ] else []
   ] where
     opt :: String -> (NixOptions -> Maybe a) -> (a -> String) -> [String]
     opt name get toStr = case get opts of

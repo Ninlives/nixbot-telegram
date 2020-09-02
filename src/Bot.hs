@@ -19,6 +19,7 @@ data BotContext    = BotContext { chatId              :: Maybe ChatId
                                 , nixPath             :: [String]
                                 , exprFilePath        :: FilePath
                                 , predefinedVariables :: Map String String
+                                , readWriteMode       :: Bool
                                 }
 data Command       = Command { cmdName :: Text, input :: Text }
 data ExecuteResult = NoResponse | Success Text | Fail Text

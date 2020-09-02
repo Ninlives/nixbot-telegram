@@ -39,6 +39,7 @@ data BotConfig = BotConfig { nixInstantiatePath  :: FilePath
                            , exprFilePath        :: FilePath
                            , predefinedVariables :: Maybe (Map String String)
                            , token               :: T.Text
+                           , readWriteMode       :: Maybe Bool
                            } deriving (Generic)
 instance FromJSON BotConfig where
     parseJSON = genericParseJSON defaultOptions
@@ -56,6 +57,7 @@ main = do args <- getArgs
                             , Main.token = t
                             , Main.exprFilePath = efp
                             , Main.predefinedVariables = pdv
+                            , Main.readWriteMode = rwm
                             }) -> do 
                 manager' <- newManager tlsManagerSettings
                 absExpr <- makeAbsolute efp
@@ -68,8 +70,11 @@ main = do args <- getArgs
                                         , B.nixPath = np
                                         , B.exprFilePath = absExpr
                                         , B.predefinedVariables = case pdv of
-                                                                    Nothing -> empty
+                                                                    Nothing  -> empty
                                                                     Just map -> map
+                                        , B.readWriteMode = case rwm of
+                                                              Nothing    -> False
+                                                              Just value -> value
                                         }
                 loop ctx 0
 

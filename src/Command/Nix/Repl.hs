@@ -93,9 +93,10 @@ writeExprFile scopes lit = do
 
 nixEval :: String -> EvalMode -> TelegraM (Either String String)
 nixEval contents mode = do
-  nixInstPath <- gets nixInstantiatePath
-  nixPath <- gets Bot.nixPath
-  exprPath <- gets exprFilePath
+  nixInstPath   <- gets nixInstantiatePath
+  nixPath       <- gets Bot.nixPath
+  exprPath      <- gets exprFilePath
+  rwMode        <- gets Bot.readWriteMode
   res <- lift . liftIO $ nixInstantiate nixInstPath (defNixEvalOptions (Left (BS.fromStrict (encodeUtf8 (Text.pack contents)))))
     { mode = mode
     , NixEval.nixPath = exprPath:nixPath
@@ -104,6 +105,7 @@ nixEval contents mode = do
       , restrictEval = Just True
       , sandbox = Just True
       , showTrace = Just True
+      , NixEval.readWriteMode = rwMode
       }
     }
   return $ bimap (Text.unpack . decodeUtf8 . BS.toStrict) (Text.unpack . decodeUtf8 . BS.toStrict) res
