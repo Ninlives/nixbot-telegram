@@ -88,7 +88,7 @@ nixFile NixState { variables, scopes } lit = do
 writeExprFile :: [ String ] -> String -> TelegraM ()
 writeExprFile scopes lit = do
     exprPath <- gets exprFilePath
-    let content = concatMap (\scope -> "\twith " ++ scope ++ ";\n") (reverse scopes) ++ "\t" ++ lit
+    let content = concatMap (\scope -> "\twith (" ++ scope ++ ");\n") (reverse scopes) ++ "\t" ++ lit
     lift $ writeFile exprPath content
 
 nixEval :: String -> EvalMode -> TelegraM (Either String String)
@@ -132,17 +132,25 @@ handle (Evaluation strict lit) = do
   case result of
     Right value -> return value
     Left err    -> return err
-handle (ReplCommand "l" []) = return ":l needs an argument"
-handle (ReplCommand "l" args) = do
+handle (ReplCommand "h" _) = return $ "<expr>        Evaluate and print expression\n"
+    ++ "<x> = <expr>  Bind expression to variable\n"
+    ++ ":a <expr>     Add attributes from resulting set to scope\n"
+    ++ ":p <expr>     Evaluate and print expression recursively\n"
+    ++ ":v            Show all variable bindings\n"
+    ++ ":v <x>        Show variable bindings of <x>\n"
+    ++ ":s            Show all scopes\n"
+    ++ ":r            Reset bindings and scopes"
+handle (ReplCommand "a" []) = return ":a needs an argument"
+handle (ReplCommand "a" args) = do
   result <- tryMod (\s -> s { scopes = unwords args : scopes s } )
   case result of
     Nothing  -> return "imported scope"
     Just err -> return err
 handle (ReplCommand "v" [var]) = do
-  val <- gets $ M.findWithDefault (var ++ " is not defined") var . flip M.union defaultVariables . variables
+  val <- gets $ M.findWithDefault (var ++ " is not defined") var . M.union shownVariables . variables
   return $ var ++ " = " ++ val
 handle (ReplCommand "v" _) = do
-  vars <- gets $ M.keys . flip M.union defaultVariables . variables
+  vars <- gets $ M.keys . M.union shownVariables . variables
   return $ "All bindings: " ++ unwords vars
 handle (ReplCommand "s" _) = do
   scopes <- gets scopes
@@ -167,13 +175,19 @@ handle (ReplCommand "r" []) = do
 handle (ReplCommand cmd _) = return $ "Unknown command: " ++ cmd
 
 defaultVariables :: Map String String
-defaultVariables = M.fromList
+defaultVariables = M.union hiddenVariables shownVariables
+
+hiddenVariables :: Map String String
+hiddenVariables = M.fromList
   [ ("_show", "x: if overrides.lib.isDerivation x then \"«derivation ${x.drvPath}»\" else x")
-  , ("pkgs", "import <nixpkgs> {}")
-  , ("lib", "overrides.pkgs.lib")
   , ("import", "fn: scopedImport overrides fn")
   , ("scopedImport", "attrs: fn: scopedImport (overrides // attrs) fn")
   , ("builtins", "builtins // overrides // (overrides.builtinsOverrides or {})")
+  ]
+
+shownVariables = M.fromList
+  [ ("pkgs", "import <nixpkgs> {}")
+  , ("lib", "overrides.pkgs.lib")
   ]
 
 evalCommand :: Text -> TelegraM ExecuteResult
