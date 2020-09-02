@@ -130,7 +130,7 @@ handle (Evaluation strict lit) = do
   contents <- lift $ nixFile st ("_show (\n" ++ lit ++ "\n)")
   result <- lift $ nixEval contents (if strict then Strict else Lazy)
   case result of
-    Right value -> return value
+    Right value -> return $ "> " ++ value
     Left err    -> return err
 handle (ReplCommand "h" _) = return $ "<expr>        Evaluate and print expression\n"
     ++ "<x> = <expr>  Bind expression to variable\n"
@@ -214,4 +214,4 @@ evalCommand input = do
               return $ NixState M.empty []       
             (result, newState) <- runStateT (handle instruction) initialState
             liftIO $ encodeFile stateFile newState
-            return $ B.Success $ pack $ "> " ++ result
+            return $ B.Success $ pack result
