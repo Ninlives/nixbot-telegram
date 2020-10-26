@@ -115,7 +115,7 @@ toProc nixInstantiatePath NixEvalOptions { contents, attributes, arguments, nixP
     ++ concatMap (\(var, val) -> [ "--arg", var, val ]) (M.assocs arguments)
     ++ concatMap (\p -> [ "-I", p ]) nixPath
     ++ optionsToArgs options
-  process = TP.proc "timeout" $ ["-k", "1s", "2s", nixInstantiatePath] ++ opts
+  process = TP.proc "@timeout@" $ ["-k", "5s", "5s", nixInstantiatePath] ++ opts
   in case contents of
     Left bytes -> TP.setStdin (TP.byteStringInput bytes) process
     Right _    -> process
@@ -124,4 +124,5 @@ toProc nixInstantiatePath NixEvalOptions { contents, attributes, arguments, nixP
 nixInstantiate :: FilePath -> NixEvalOptions -> IO (Either ByteString ByteString)
 nixInstantiate nixInstPath opts = toEither <$> TP.readProcess (toProc nixInstPath opts)
   where toEither (ExitSuccess, stdout, _)   = Right stdout
-        toEither (ExitFailure _, _, stderr) = Left stderr
+        toEither (ExitFailure code, _, stderr) = if code == 137 then Left "Too Long, Don't Evaluate"
+                                                                else Left stderr
