@@ -29,4 +29,3 @@ executable nixbot-telegram
                        , filepath
                        , directory
                        , aeson
-                       , utf8-string

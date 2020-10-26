@@ -9,7 +9,6 @@ module NixEval ( nixInstantiate
                ) where
 
 import           Data.ByteString.Lazy (ByteString, append)
-import           Data.ByteString.Lazy.UTF8 (fromString)
 import           Data.Map             (Map)
 import qualified Data.Map             as M
 import           System.Exit
@@ -125,5 +124,5 @@ toProc nixInstantiatePath NixEvalOptions { contents, attributes, arguments, nixP
 nixInstantiate :: FilePath -> NixEvalOptions -> IO (Either ByteString ByteString)
 nixInstantiate nixInstPath opts = toEither <$> TP.readProcess (toProc nixInstPath opts)
   where toEither (ExitSuccess, stdout, _)   = Right stdout
-        toEither (ExitFailure code, _, stderr) = if code == 137 then Left "Too Long, Don't Evaluate"
-                                                                else Left $ append stderr (fromString $ show code)
+        toEither (ExitFailure code, _, stderr) = if code == (-9) then Left "Too Long, Don't Evaluate"
+                                                                 else Left stderr
