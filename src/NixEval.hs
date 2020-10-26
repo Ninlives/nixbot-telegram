@@ -125,4 +125,4 @@ nixInstantiate :: FilePath -> NixEvalOptions -> IO (Either ByteString ByteString
 nixInstantiate nixInstPath opts = toEither <$> TP.readProcess (toProc nixInstPath opts)
   where toEither (ExitSuccess, stdout, _)   = Right stdout
         toEither (ExitFailure code, _, stderr) = if code == 137 then Left "Too Long, Don't Evaluate"
-                                                                else Left stderr
+                                                                else Left $ stderr ++ show code

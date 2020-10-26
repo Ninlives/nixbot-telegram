@@ -189,6 +189,7 @@ hiddenVariables = M.fromList
 
 shownVariables = M.fromList
   [ ("pkgs", "import <nixpkgs> {}")
+  , ("nixpkgs", "pkgs")
   , ("lib", "overrides.pkgs.lib")
   ]
 
