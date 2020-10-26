@@ -115,7 +115,7 @@ toProc nixInstantiatePath NixEvalOptions { contents, attributes, arguments, nixP
     ++ concatMap (\(var, val) -> [ "--arg", var, val ]) (M.assocs arguments)
     ++ concatMap (\p -> [ "-I", p ]) nixPath
     ++ optionsToArgs options
-  process = TP.proc nixInstantiatePath opts
+  process = TP.proc "timeout" $ ["-k", "1s", "2s", nixInstantiatePath] ++ opts
   in case contents of
     Left bytes -> TP.setStdin (TP.byteStringInput bytes) process
     Right _    -> process
