@@ -116,13 +116,13 @@ formatResult result = case result of
     Error err -> if length err > 4000 then cut $ escape err else escape err ++ "\n<b><i>You shall not parse</i></b>"
     Timeout   -> "<b><i>Too Long, Don't Evaluate</i></b>"
   where cut str = if length str > 4000 then (take 4000 str) 
-                                            ++ "...\n<b><i>I have received a truly marvelous result of this, which this chatbox is too narrow to contain</i></b>"
+                                            ++ "...\n\n<b><i>I have received a truly marvelous result of this, which this chatbox is too narrow to contain</i></b>"
                                       else str
 
 escape :: String -> String
 escape str = concat $ map repl str
-    where repl '<' = "&lt"
-          repl '>' = "&gt"
+    where repl '<' = "&lt;"
+          repl '>' = "&gt;"
           repl c   = [c]
 
 tryMod :: (NixState -> NixState) -> ReplApp (Maybe String)
