@@ -9,7 +9,7 @@ import Servant.Client
 import Web.Telegram.API (Token(..), ChatId(..))
 import qualified Web.Telegram.API.Update as U (Polling(..))
 import qualified Web.Telegram.API.Sending.Data as D (SMessage(..))
-import Web.Telegram.Types (MessageContent(..), MessageMetadata(..), def)
+import Web.Telegram.Types (MessageContent(..), MessageMetadata(..), ParseMode(..), def)
 import Web.Telegram.Types (Message(..), MessageEntity(..), MessageEntityType(..))
 import Web.Telegram.Types.Update (ReqResult (..), Update(..))
 import qualified Web.Telegram.Types as M (Chat(..), MessageEntity(..))
@@ -103,7 +103,7 @@ process = process' 0
               let id  = updateId update
                   cid = message >>> metadata >>> chat >>> M.chatId $ update
                   mid = message >>> metadata >>> messageId $ update
-                  respond msg = sendMessage $ def { D.chatId = (ChatId cid), D.text = msg, D.replyToMessageId = Just mid }
+                  respond msg = sendMessage $ def { D.chatId = (ChatId cid), D.text = msg, D.replyToMessageId = Just mid, D.parseMode = Just HTML }
                   processMessage msg = do result <- processMessage' msg
                                           case result of
                                             Success msg -> void $ respond msg
