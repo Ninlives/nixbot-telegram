@@ -12,7 +12,7 @@ import qualified Bot as B
 import           Control.Applicative        ((<|>))
 import           Control.Monad.Reader
 import           Control.Monad.State
-import           Data.Aeson
+import           Data.Aeson          hiding (Error)
 import           Data.Bifunctor             (bimap)
 import qualified Data.ByteString.Lazy.Char8 as BS
 import           Data.List
@@ -91,7 +91,7 @@ writeExprFile scopes lit = do
     let content = concatMap (\scope -> "\twith (" ++ scope ++ ");\n") (reverse scopes) ++ "\t" ++ lit
     lift $ writeFile exprPath content
 
-nixEval :: String -> EvalMode -> TelegraM (Either String String)
+nixEval :: String -> EvalMode -> TelegraM EvalResult
 nixEval contents mode = do
   nixInstPath   <- gets nixInstantiatePath
   nixPath       <- gets Bot.nixPath
@@ -108,7 +108,22 @@ nixEval contents mode = do
       , NixEval.readWriteMode = rwMode
       }
     }
-  return $ bimap (Text.unpack . decodeUtf8 . BS.toStrict) (Text.unpack . decodeUtf8 . BS.toStrict) res
+  return res
+
+formatResult :: EvalResult -> String
+formatResult result = case result of
+    Ok output -> cut . escape $ "> " ++ output
+    Error err -> if length err > 4000 then cut $ escape err else escape err ++ "\n<b><i>You shall not parse</i></b>"
+    Timeout   -> "<b><i>Too Long, Don't Evaluate</i></b>"
+  where cut str = if length str > 4000 then (take 4000 str) 
+                                            ++ "...\n<b><i>I have received a truly marvelous result of this, which this chatbox is too narrow to contain</i></b>"
+                                      else str
+
+escape :: String -> String
+escape str = concat $ map repl str
+    where repl '<' = "&lt"
+          repl '>' = "&gt"
+          repl c   = [c]
 
 tryMod :: (NixState -> NixState) -> ReplApp (Maybe String)
 tryMod modi = do
@@ -116,10 +131,11 @@ tryMod modi = do
   contents <- lift $ nixFile newState "null"
   result <- lift $ nixEval contents Parse
   case result of
-    Right _ -> do
+    Ok _ -> do
       put newState
       return Nothing
-    Left err -> return $ Just err
+    Error err -> return $ Just err
+    Timeout   -> return $ Just "Timeout"
 
 handle :: Instruction -> ReplApp String
 handle (Definition lit val) = do
@@ -131,10 +147,8 @@ handle (Evaluation strict lit) = do
   st <- get
   contents <- lift $ nixFile st ("_show (\n" ++ lit ++ "\n)")
   result <- lift $ nixEval contents (if strict then Strict else Lazy)
-  case result of
-    Right value -> return $ "> " ++ value
-    Left err    -> return err
-handle (ReplCommand "h" _) = return $ "<expr>        Evaluate and print expression\n"
+  return $ formatResult result
+handle (ReplCommand "h" _) = return . escape $ "<expr>        Evaluate and print expression\n"
     ++ "<x> = <expr>  Bind expression to variable\n"
     ++ ":a <expr>     Add attributes from resulting set to scope\n"
     ++ ":p <expr>     Evaluate and print expression recursively\n"

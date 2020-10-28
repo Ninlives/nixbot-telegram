@@ -4,15 +4,20 @@ module NixEval ( nixInstantiate
                , NixOptions(..)
                , unsetNixOptions
                , EvalMode(..)
+               , EvalResult(..)
                , NixEvalOptions(..)
                , defNixEvalOptions
                ) where
 
-import           Data.ByteString.Lazy (ByteString, append)
-import           Data.Map             (Map)
-import qualified Data.Map             as M
+import           Data.ByteString.Lazy       (ByteString, append)
+import qualified Data.ByteString.Lazy.Char8 as BS
+import           Data.Text                  (Text, pack)
+import qualified Data.Text                  as Text
+import Data.Text.Encoding
+import           Data.Map                   (Map)
+import qualified Data.Map                   as M
 import           System.Exit
-import qualified System.Process.Typed as TP
+import qualified System.Process.Typed       as TP
 
 data NixOptions = NixOptions
   { cores                     :: Maybe Int
@@ -121,8 +126,11 @@ toProc nixInstantiatePath NixEvalOptions { contents, attributes, arguments, nixP
     Right _    -> process
 
 
-nixInstantiate :: FilePath -> NixEvalOptions -> IO (Either ByteString ByteString)
+data EvalResult = Ok String | Error String | Timeout
+
+nixInstantiate :: FilePath -> NixEvalOptions -> IO EvalResult
 nixInstantiate nixInstPath opts = toEither <$> TP.readProcess (toProc nixInstPath opts)
-  where toEither (ExitSuccess, stdout, _)   = Right stdout
-        toEither (ExitFailure code, _, stderr) = if code == (-9) then Left "<b><i>Too Long, Don't Evaluate</i></b>"
-                                                                 else Left stderr
+  where toEither (ExitSuccess, stdout, _)   = Ok $ toString stdout
+        toEither (ExitFailure code, _, stderr) = if code == (-9) then Timeout 
+                                                                 else Error $ toString stderr
+        toString = Text.unpack . decodeUtf8 . BS.toStrict
