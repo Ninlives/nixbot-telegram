@@ -16,7 +16,7 @@ import           Data.Aeson          hiding (Error)
 import           Data.Bifunctor             (bimap)
 import qualified Data.ByteString.Lazy.Char8 as BS
 import           Data.List
-import           Data.Text                  (Text, pack)
+import           Data.Text                  (Text, unpack, pack)
 import qualified Data.Text                  as Text
 import Data.Text.Encoding
 import           GHC.Generics
@@ -29,6 +29,8 @@ import           Data.Map                   (Map)
 import qualified Data.Map                   as M
 
 import           Web.Telegram.API (ChatId(..))
+
+import           HTMLEntities.Text
 
 
 data Instruction = Definition String String
@@ -120,10 +122,7 @@ formatResult result = case result of
                                       else str
 
 escape :: String -> String
-escape str = concat $ map repl str
-    where repl '<' = "&lt;"
-          repl '>' = "&gt;"
-          repl c   = [c]
+escape str = unpack . text . pack $ str
 
 tryMod :: (NixState -> NixState) -> ReplApp (Maybe String)
 tryMod modi = do

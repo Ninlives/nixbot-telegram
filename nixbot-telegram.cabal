@@ -29,3 +29,4 @@ executable nixbot-telegram
                        , filepath
                        , directory
                        , aeson
+                       , html-entities
