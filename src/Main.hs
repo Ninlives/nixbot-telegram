@@ -125,7 +125,7 @@ executeCommands (cmd:others) = do executeCommand cmd
                                   executeCommands others
 
 executeCommand (Command { cmdName = cname, input = cinput })
-  | cname == "/eval" = evalCommand cinput
+  | cname == "/eval" || "/eval@" `T.isPrefixOf` cname = evalCommand cinput
   | otherwise        = return NoResponse
 
 extractCommands :: T.Text -> Maybe [MessageEntity] -> [Command]
