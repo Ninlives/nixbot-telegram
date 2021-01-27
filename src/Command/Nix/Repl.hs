@@ -197,7 +197,7 @@ hiddenVariables = M.fromList
   [ ("_show", "x: if overrides.lib.isDerivation x then \"«derivation ${x.drvPath}»\" else x")
   , ("import", "fn: scopedImport overrides fn")
   , ("scopedImport", "attrs: fn: scopedImport (overrides // attrs) fn")
-  , ("builtins", "builtins // overrides // (overrides.builtinsOverrides or {})")
+  , ("builtins", "builtins // { inherit (overrides) import scopedImport; } // (overrides.builtinsOverrides or {})")
   ]
 
 shownVariables = M.fromList
