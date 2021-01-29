@@ -162,10 +162,10 @@ handle (ReplCommand "a" args) = do
     Nothing  -> return "imported scope"
     Just err -> return err
 handle (ReplCommand "v" [var]) = do
-  val <- gets $ M.findWithDefault (var ++ " is not defined") var . M.union shownVariables . variables
+  val <- gets $ M.findWithDefault (var ++ " is not defined") var . variables
   return $ var ++ " = " ++ val
 handle (ReplCommand "v" _) = do
-  vars <- gets $ M.keys . M.union shownVariables . variables
+  vars <- gets $ M.keys . variables
   return $ "All bindings: " ++ unwords vars
 handle (ReplCommand "s" _) = do
   scopes <- gets scopes
@@ -179,7 +179,7 @@ handle (ReplCommand "s" _) = do
 --    else return . Just $ lit ++ " is not defined"
 --handle (ReplCommand "d" _) = return $ Just ":d takes a single argument"
 handle (ReplCommand "r" []) = do
-  modify (\s -> s { scopes = [], variables = M.empty })
+  modify (\s -> s { scopes = defaultScopes, variables = M.empty })
   return "Scopes and bindings got reset"
 --handle (ReplCommand "r" ["v"]) = do
 --  modify (\s -> s { variables = M.empty })
@@ -190,22 +190,15 @@ handle (ReplCommand "r" []) = do
 handle (ReplCommand cmd _) = return $ "Unknown command: " ++ cmd
 
 defaultVariables :: Map String String
-defaultVariables = M.union hiddenVariables shownVariables
-
-hiddenVariables :: Map String String
-hiddenVariables = M.fromList
-  [ ("_show", "x: if overrides.lib.isDerivation x then \"«derivation ${x.drvPath}»\" else x")
+defaultVariables = M.fromList
+  [ ("_show", "x: if builtins.isAttrs x && x ? type && x.type == \"derivation\" then \"«derivation ${x.drvPath}»\" else x")
   , ("import", "fn: scopedImport overrides fn")
   , ("scopedImport", "attrs: fn: scopedImport (overrides // attrs) fn")
   , ("builtins", "builtins // { inherit (overrides) import scopedImport; } // (overrides.builtinsOverrides or {})")
   ]
 
-shownVariables = M.fromList
-  [ ("pkgs", "scopedImport (removeAttrs overrides [ \"pkgs\" \"nixpkgs\" \"stdenv\" \"lib\" ]) <nixpkgs> {}")
-  , ("nixpkgs", "overrides.pkgs")
-  , ("stdenv", "overrides.pkgs.stdenv")
-  , ("lib", "overrides.pkgs.lib")
-  ]
+defaultScopes :: [String]
+defaultScopes = [ "import <nixpkgs> {}" ]
 
 evalCommand :: Text -> TelegraM ExecuteResult
 evalCommand input = do
@@ -228,7 +221,7 @@ evalCommand input = do
                       lift $ putStrLn $ "Failed to decode nix state at " <> stateFile
                       return $ NixState M.empty []
             else
-              return $ NixState M.empty []       
+              return $ NixState M.empty defaultScopes       
             (result, newState) <- runStateT (handle instruction) initialState
             liftIO $ encodeFile stateFile newState
             return $ B.Success $ pack result
