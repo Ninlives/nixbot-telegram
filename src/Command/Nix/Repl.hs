@@ -141,7 +141,7 @@ handle (Definition lit val) = do
   result <- tryMod (\s -> s { variables = M.insert lit val (variables s) })
   case result of
     Nothing  -> return $ lit ++ " defined"
-    Just err -> return err
+    Just err -> return . formatResult $ Error err
 handle (Evaluation strict lit) = do
   st <- get
   contents <- lift $ nixFile st ("_show (\n" ++ lit ++ "\n)")
@@ -160,16 +160,16 @@ handle (ReplCommand "a" args) = do
   result <- tryMod (\s -> s { scopes = unwords args : scopes s } )
   case result of
     Nothing  -> return "imported scope"
-    Just err -> return err
+    Just err -> return . formatResult $ Error err
 handle (ReplCommand "v" [var]) = do
   val <- gets $ M.findWithDefault (var ++ " is not defined") var . variables
-  return $ var ++ " = " ++ val
+  return . escape $ var ++ " = " ++ val
 handle (ReplCommand "v" _) = do
   vars <- gets $ M.keys . variables
-  return $ "All bindings: " ++ unwords vars
+  return . escape $ "All bindings:\n  " ++ intercalate ", " vars
 handle (ReplCommand "s" _) = do
   scopes <- gets scopes
-  return $ "All scopes: " ++ intercalate ", " scopes
+  return . escape $ "All scopes:\n  " ++ intercalate "\n, " (map (\s -> "(" ++ s ++ ")") scopes)
 --handle (ReplCommand "d" [lit]) = do
 --  litDefined <- gets $ M.member lit . variables
 --  if litDefined
@@ -219,9 +219,9 @@ evalCommand input = do
                   Just result -> return result
                   Nothing     -> do
                       lift $ putStrLn $ "Failed to decode nix state at " <> stateFile
-                      return $ NixState M.empty []
-            else
-              return $ NixState M.empty defaultScopes       
+                      return $ NixState M.empty defaultScopes
+              else
+                return $ NixState M.empty defaultScopes       
             (result, newState) <- runStateT (handle instruction) initialState
             liftIO $ encodeFile stateFile newState
             return $ B.Success $ pack result
