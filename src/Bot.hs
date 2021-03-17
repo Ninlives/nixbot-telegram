@@ -1,26 +1,35 @@
+{-# LANGUAGE DeriveGeneric #-}
+
 module Bot where 
 
 import Data.Proxy
 import Data.Text
 import Data.Map
 import Servant.Client
-import Web.Telegram.API (SendMessage, Token(..), ChatId(..))
+import Web.Telegram.API              (SendMessage, Token(..), ChatId(..))
 import Web.Telegram.API.Sending.Data (SMessage(..))
-import Web.Telegram.API.Update (Polling(..), GetUpdates)
-import Web.Telegram.Types (Message)
-import Web.Telegram.Types.Update (ReqResult(..), Update(..))
-import Control.Monad.Trans.State (gets, get, StateT, evalStateT)
+import Web.Telegram.API.Update       (Polling(..), GetUpdates)
+import Web.Telegram.Types            (Message)
+import Web.Telegram.Types.Update     (ReqResult(..), Update(..))
+import Control.Monad.Trans.State     (gets, get, StateT, evalStateT)
 import Control.Monad.Trans.Class
+import NixEval
+import GHC.Generics
+
+data BotConfig = BotConfig { nixInstantiatePath  :: FilePath
+                           , nixPath             :: [String]
+                           , exprFilePath        :: FilePath
+                           , predefinedVariables :: Maybe (Map String String)
+                           , token               :: Text
+                           , nixOptions          :: Maybe NixOptions
+                           } deriving (Generic)
 
 data BotContext    = BotContext { chatId              :: Maybe ChatId
-                                , token               :: Token
+                                , token'              :: Token
                                 , env                 :: ClientEnv
-                                , nixInstantiatePath  :: FilePath
-                                , nixPath             :: [String]
-                                , exprFilePath        :: FilePath
-                                , predefinedVariables :: Map String String
-                                , readWriteMode       :: Bool
+                                , config              :: BotConfig
                                 }
+
 data Command       = Command { cmdName :: Text, input :: Text }
 data ExecuteResult = NoResponse | Success Text | Fail Text
 
@@ -41,12 +50,12 @@ sendMessage :: SMessage -> APIResponse (ReqResult Message)
 sendMessage = executeTelegram . sendMessage'
 
 sendMessage' :: SMessage -> BotClientM (ReqResult Message)
-sendMessage' msg = gets token >>= \token' -> lift $ send token' msg
+sendMessage' msg = gets token' >>= \t -> lift $ send t msg
     where send = (client (Proxy :: Proxy SendMessage)) :: Token -> SMessage -> ClientM (ReqResult Message)
 
 getUpdates :: Polling -> APIResponse (ReqResult [Update])
 getUpdates = executeTelegram . getUpdates'
 
 getUpdates' :: Polling -> BotClientM (ReqResult [Update])
-getUpdates' polling = gets token >>= \token' -> lift $ get token' polling
+getUpdates' polling = gets token' >>= \t -> lift $ get t polling
     where get = (client (Proxy :: Proxy GetUpdates)) :: Token -> Polling -> ClientM (ReqResult [Update])

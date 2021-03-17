@@ -1,7 +1,10 @@
 {-# LANGUAGE NamedFieldPuns    #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE DeriveGeneric #-}
+
 module NixEval ( nixInstantiate
                , NixOptions(..)
+               , OptionValue(..)
                , unsetNixOptions
                , EvalMode(..)
                , EvalResult(..)
@@ -18,34 +21,27 @@ import           Data.Map                   (Map)
 import qualified Data.Map                   as M
 import           System.Exit
 import qualified System.Process.Typed       as TP
+import           GHC.Generics
+
+data OptionValue = OptInt  Int
+                 | OptBool Bool
+                 | OptStr  String
+                 deriving (Generic)
+
+value :: OptionValue -> String
+value (OptBool True)  = "true"
+value (OptBool False) = "false"
+value (OptInt i)      = show i
+value (OptStr s)      = show s
 
 data NixOptions = NixOptions
-  { cores                     :: Maybe Int
-  , fsyncMetadata             :: Maybe Bool
-  , restrictEval              :: Maybe Bool
-  , sandbox                   :: Maybe Bool
-  , timeout                   :: Maybe Int
-  , maxJobs                   :: Maybe Int
-  , allowImportFromDerivation :: Maybe Bool
-  , allowedUris               :: Maybe [String]
-  , showTrace                 :: Maybe Bool
-  , pureEval                  :: Maybe Bool
+  { nixConf                   :: Map String OptionValue
   , readWriteMode             :: Bool
-  }
-  deriving (Show)
+  } deriving (Generic)
 
 unsetNixOptions :: NixOptions
 unsetNixOptions = NixOptions
-  { cores = Nothing
-  , fsyncMetadata = Nothing
-  , restrictEval = Nothing
-  , sandbox = Nothing
-  , timeout = Nothing
-  , maxJobs = Nothing
-  , allowImportFromDerivation = Nothing
-  , allowedUris = Nothing
-  , showTrace = Nothing
-  , pureEval = Nothing 
+  { nixConf = M.empty
   , readWriteMode = False
   }
 {-
@@ -62,25 +58,9 @@ publicOptions = def
 -}
 
 optionsToArgs :: NixOptions -> [String]
-optionsToArgs opts = concat
-  [ opt "cores" cores show
-  , opt "fsync-metadata" fsyncMetadata bool
-  , opt "restrict-eval" restrictEval bool
-  , opt "sandbox" sandbox bool
-  , opt "timeout" timeout show
-  , opt "max-jobs" maxJobs show
-  , opt "allow-import-from-derivation" allowImportFromDerivation bool
-  , opt "allowed-uris" allowedUris unwords
-  , opt "show-trace" showTrace bool
-  , opt "pure-eval" pureEval bool
-  , if readWriteMode opts then [ "--read-write-mode" ] else []
-  ] where
-    opt :: String -> (NixOptions -> Maybe a) -> (a -> String) -> [String]
-    opt name get toStr = case get opts of
-      Nothing    -> []
-      Just value -> [ "--option", name, toStr value ]
-    bool True  = "true"
-    bool False = "false"
+optionsToArgs opts = concat $ 
+    (map (\(k, v) -> [ "--option", k, value v ]) (M.toList $ nixConf opts)) 
+    ++ if readWriteMode opts then [ [ "--read-write-mode" ] ] else []
 
 data EvalMode = Parse | Lazy | Strict | Json
 

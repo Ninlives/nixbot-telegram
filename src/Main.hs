@@ -4,45 +4,53 @@
 module Main where
 
 import qualified Prelude as P
-import Prelude
-import Servant.Client
-import Web.Telegram.API (Token(..), ChatId(..))
+import           Prelude
+import           Servant.Client
+import           Web.Telegram.API          (Token(..), ChatId(..))
 import qualified Web.Telegram.API.Update as U (Polling(..))
 import qualified Web.Telegram.API.Sending.Data as D (SMessage(..))
-import Web.Telegram.Types (MessageContent(..), MessageMetadata(..), ParseMode(..), def)
-import Web.Telegram.Types (Message(..), MessageEntity(..), MessageEntityType(..))
-import Web.Telegram.Types.Update (ReqResult (..), Update(..))
-import qualified Web.Telegram.Types as M (Chat(..), MessageEntity(..))
-import Network.HTTP.Client (newManager)
-import Network.HTTP.Client.TLS (tlsManagerSettings)
+import           Web.Telegram.Types        (MessageContent(..), MessageMetadata(..), ParseMode(..), def)
+import           Web.Telegram.Types        (Message(..), MessageEntity(..), MessageEntityType(..))
+import           Web.Telegram.Types.Update (ReqResult (..), Update(..))
+import qualified Web.Telegram.Types as M   (Chat(..), MessageEntity(..))
+import           Network.HTTP.Client       (newManager)
+import           Network.HTTP.Client.TLS   (tlsManagerSettings)
 import qualified Data.Text as T
-import Control.Monad
-import Control.Monad.Trans.State (modify)
-import Control.Monad.Trans.Class
-import Control.Monad.IO.Class
-import Control.Concurrent
-import Control.Arrow
-import Bot
+import           Control.Monad
+import           Control.Monad.Trans.State (modify)
+import           Control.Monad.Trans.Class
+import           Control.Monad.IO.Class
+import           Control.Concurrent
+import           Control.Arrow
+import           Bot
 import qualified Bot as B
-import Command.Nix.Repl
-import System.Environment
-import System.Exit
-import System.Directory
-import Data.Map
+import           NixEval (NixOptions, OptionValue(..))
+import           Command.Nix.Repl
+import           System.Environment
+import           System.Exit
+import           System.Directory
+import           Data.Map
 
-import GHC.Generics
-import Data.Aeson hiding (Success)
+import           GHC.Generics
+import           Data.Aeson hiding (Success)
+import           Data.Aeson.Types (unexpected)
 import qualified Data.ByteString.Lazy as BSL
+import           Data.Scientific
 
-data BotConfig = BotConfig { nixInstantiatePath  :: FilePath
-                           , nixPath             :: [String]
-                           , exprFilePath        :: FilePath
-                           , predefinedVariables :: Maybe (Map String String)
-                           , token               :: T.Text
-                           , readWriteMode       :: Maybe Bool
-                           } deriving (Generic)
 instance FromJSON BotConfig where
     parseJSON = genericParseJSON defaultOptions
+instance FromJSON NixOptions where
+    parseJSON = genericParseJSON defaultOptions
+
+instance FromJSON OptionValue where
+    parseJSON (Number n) = if isInteger n then
+                            case toBoundedInteger n of
+                              Nothing -> unexpected (Number n)
+                              Just i  -> return $ OptInt i
+                           else unexpected (Number n)
+    parseJSON (Bool b)   = return $ OptBool b
+    parseJSON (String s) = return $ OptStr $ T.unpack s
+    parseJSON invalid    = unexpected invalid
 
 main :: IO ()
 main = do args <- getArgs
@@ -52,29 +60,14 @@ main = do args <- getArgs
           case config of
             Nothing -> do putStrLn "Error parsing config."
                           exitWith (ExitFailure 1)
-            Just (BotConfig { Main.nixInstantiatePath = nip
-                            , Main.nixPath = np
-                            , Main.token = t
-                            , Main.exprFilePath = efp
-                            , Main.predefinedVariables = pdv
-                            , Main.readWriteMode = rwm
-                            }) -> do 
+            Just config -> do 
                 manager' <- newManager tlsManagerSettings
-                absExpr <- makeAbsolute efp
-                let token' = Token t
+                let token' = Token (token config)
                     env'   = mkClientEnv manager' (BaseUrl Https "api.telegram.org" 443 "")
-                    ctx    = BotContext { B.chatId = Nothing
-                                        , B.token = token'
+                    ctx    = BotContext { chatId = Nothing
+                                        , token' = token'
                                         , env = env'
-                                        , B.nixInstantiatePath = nip
-                                        , B.nixPath = np
-                                        , B.exprFilePath = absExpr
-                                        , B.predefinedVariables = case pdv of
-                                                                    Nothing  -> empty
-                                                                    Just map -> map
-                                        , B.readWriteMode = case rwm of
-                                                              Nothing    -> False
-                                                              Just value -> value
+                                        , config = config
                                         }
                 loop ctx 0
 

@@ -30,3 +30,5 @@ executable nixbot-telegram
                        , directory
                        , aeson
                        , html-entities
+                       , sqlite-simple
+                       , scientific

@@ -13,7 +13,6 @@ import           Control.Applicative        ((<|>))
 import           Control.Monad.Reader
 import           Control.Monad.State
 import           Data.Aeson          hiding (Error)
-import           Data.Bifunctor             (bimap)
 import qualified Data.ByteString.Lazy.Char8 as BS
 import           Data.List
 import           Data.Text                  (Text, unpack, pack)
@@ -78,37 +77,44 @@ parser =
         C.space
         Definition lit <$> P.takeRest
 
+
+defaultTo :: a -> Maybe a -> a
+defaultTo d Nothing  = d
+defaultTo _ (Just v) = v
+
 nixFile :: NixState -> String -> TelegraM String
 nixFile NixState { variables, scopes } lit = do
     writeExprFile scopes lit
-    file <- gets exprFilePath
-    predefinedVariables <- gets predefinedVariables
+    file <- gets $ exprFilePath . config
+    predefinedVariables <- gets $ defaultTo M.empty . predefinedVariables . config
     return $ "let overrides = {\n"
              ++ concatMap (\(l, val) -> "\t" ++ l ++ " = " ++ val ++ ";\n") (M.assocs (M.unions [predefinedVariables, defaultVariables, variables]))
              ++ "}; in scopedImport overrides " ++ file
 
 writeExprFile :: [ String ] -> String -> TelegraM ()
 writeExprFile scopes lit = do
-    exprPath <- gets exprFilePath
+    exprPath <- gets $ exprFilePath . config
     let content = concatMap (\scope -> "\twith (" ++ scope ++ ");\n") (reverse scopes) ++ "\t" ++ lit
     lift $ writeFile exprPath content
 
 nixEval :: String -> EvalMode -> TelegraM EvalResult
 nixEval contents mode = do
-  nixInstPath   <- gets nixInstantiatePath
-  nixPath       <- gets Bot.nixPath
-  exprPath      <- gets exprFilePath
-  rwMode        <- gets Bot.readWriteMode
+  botConfig     <- gets config
+  let nixInstPath = nixInstantiatePath botConfig
+      nixPath     = Bot.nixPath botConfig
+      exprPath    = exprFilePath botConfig
+      options     = defaultTo unsetNixOptions . nixOptions $ botConfig
   res <- lift . liftIO $ nixInstantiate nixInstPath (defNixEvalOptions (Left (BS.fromStrict (encodeUtf8 (Text.pack contents)))))
     { mode = mode
     , NixEval.nixPath = exprPath:nixPath
-    , options = unsetNixOptions
-      { allowImportFromDerivation = Just True
-      , restrictEval = Just True
-      , sandbox = Just True
-      , showTrace = Just True
-      , NixEval.readWriteMode = rwMode
-      }
+    , options = options
+    -- , options = unsetNixOptions
+    --   { allowImportFromDerivation = Just True
+    --   , restrictEval = Just True
+    --   , sandbox = Just True
+    --   , showTrace = Just True
+    --   , NixEval.readWriteMode = rwMode
+    --   }
     }
   return res
 
