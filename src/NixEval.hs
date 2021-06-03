@@ -37,12 +37,14 @@ value (OptStr s)      = show s
 data NixOptions = NixOptions
   { nixConf                   :: Map String OptionValue
   , readWriteMode             :: Bool
+  , timeout                   :: String
   } deriving (Generic)
 
 unsetNixOptions :: NixOptions
 unsetNixOptions = NixOptions
   { nixConf = M.empty
   , readWriteMode = False
+  , timeout = "5s"
   }
 {-
 publicOptions :: NixOptions
@@ -100,7 +102,7 @@ toProc nixInstantiatePath NixEvalOptions { contents, attributes, arguments, nixP
     ++ concatMap (\(var, val) -> [ "--arg", var, val ]) (M.assocs arguments)
     ++ concatMap (\p -> [ "-I", p ]) nixPath
     ++ optionsToArgs options
-  process = TP.proc "@timeout@" $ ["-k", "5s", "5s", nixInstantiatePath] ++ opts
+  process = TP.proc "@timeout@" $ ["-k", timeout options, timeout options, nixInstantiatePath] ++ opts
   in case contents of
     Left bytes -> TP.setStdin (TP.byteStringInput bytes) process
     Right _    -> process
