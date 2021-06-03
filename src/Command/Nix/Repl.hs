@@ -153,14 +153,7 @@ handle (Evaluation strict lit) = do
   contents <- lift $ nixFile st ("_show (\n" ++ lit ++ "\n)")
   result <- lift $ nixEval contents (if strict then Strict else Lazy)
   return $ formatResult result
-handle (ReplCommand "h" _) = return . escape $ "<expr>        Evaluate and print expression\n"
-    ++ "<x> = <expr>  Bind expression to variable\n"
-    ++ ":a <expr>     Add attributes from resulting set to scope\n"
-    ++ ":p <expr>     Evaluate and print expression recursively\n"
-    ++ ":v            Show all variable bindings\n"
-    ++ ":v <x>        Show variable bindings of <x>\n"
-    ++ ":s            Show all scopes\n"
-    ++ ":r            Reset bindings and scopes"
+handle (ReplCommand "h" _) = return helpMsg
 handle (ReplCommand "a" []) = return ":a needs an argument"
 handle (ReplCommand "a" args) = do
   result <- tryMod (\s -> s { scopes = unwords args : scopes s } )
@@ -206,7 +199,17 @@ defaultVariables = M.fromList
 defaultScopes :: [String]
 defaultScopes = [ "import <nixpkgs> {}" ]
 
+helpMsg = escape $ "<expr>        Evaluate and print expression\n"
+    ++ "<x> = <expr>  Bind expression to variable\n"
+    ++ ":a <expr>     Add attributes from resulting set to scope\n"
+    ++ ":p <expr>     Evaluate and print expression recursively\n"
+    ++ ":v            Show all variable bindings\n"
+    ++ ":v <x>        Show variable bindings of <x>\n"
+    ++ ":s            Show all scopes\n"
+    ++ ":r            Reset bindings and scopes"
+
 evalCommand :: Text -> TelegraM ExecuteResult
+evalCommand "" = return $ B.Success $ pack helpMsg
 evalCommand input = do
     chat <- gets chatId
     case chat of
