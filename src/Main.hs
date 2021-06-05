@@ -79,7 +79,7 @@ main = do args <- getArgs
                                         res <- getUpdates $ def { U.offset = Just offset_ }
                                         case res of
                                           Left err           -> do lift $ putStrLn $ "Error trying to get updates: " ++ show err
-                                                                   return offset_
+                                                                   return $ offset_ + 1
                                           Right (Ok updates) -> do lastUpdate <- process updates
                                                                    return $ lastUpdate + 1
 
