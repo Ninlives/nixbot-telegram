@@ -69,7 +69,7 @@ main = do args <- getArgs
                                         , env = env'
                                         , config = config
                                         }
-                loop ctx -1
+                loop ctx (-1)
 
     where loop ctx offset_ = do
 
@@ -79,7 +79,7 @@ main = do args <- getArgs
                                         res <- getUpdates $ def { U.offset = Just offset_ }
                                         case res of
                                           Left err           -> do lift $ putStrLn $ "Error trying to get updates: " ++ show err
-                                                                   return -1
+                                                                   return (-1)
                                           Right (Ok updates) -> do lastUpdate <- process updates
                                                                    return $ lastUpdate + 1
 
